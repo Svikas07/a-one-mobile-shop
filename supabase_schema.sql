@@ -302,6 +302,27 @@ create trigger tr_order_items_decrement_stock
     after insert on public.order_items
     for each row execute procedure public.decrement_stock_on_order();
 
+-- Automatically create profile on new user registration sign up
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+    insert into public.profiles (id, email, full_name, phone, role, status)
+    values (
+        new.id,
+        new.email,
+        coalesce(new.raw_user_meta_data->>'full_name', 'Customer'),
+        coalesce(new.raw_user_meta_data->>'phone', ''),
+        'Customer'::public.user_role,
+        'Active'
+    );
+    return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace trigger on_auth_user_created
+    after insert on auth.users
+    for each row execute procedure public.handle_new_user();
+
 -- RLS Enablement on other tables
 alter table public.brands enable row level security;
 alter table public.categories enable row level security;
