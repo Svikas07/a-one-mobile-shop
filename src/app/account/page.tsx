@@ -242,8 +242,7 @@ function AccountContent() {
               )}
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                
-                {isRegisterForm && (
+                            {isRegisterForm && (
                   <>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-text-secondary">Full Name</label>
@@ -253,7 +252,7 @@ function AccountContent() {
                           required
                           value={authName}
                           onChange={(e) => setAuthName(e.target.value)}
-                          placeholder="e.g. Vikas Sharma"
+                          placeholder="Enter your full name"
                           className="w-full p-3 pl-10 border border-border rounded-input text-xs bg-background focus:outline-none focus:border-secondary"
                         />
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
@@ -268,7 +267,7 @@ function AccountContent() {
                           required
                           value={authPhone}
                           onChange={(e) => setAuthPhone(e.target.value)}
-                          placeholder="e.g. 9876543210"
+                          placeholder="Enter your phone number"
                           className="w-full p-3 pl-10 border border-border rounded-input text-xs bg-background focus:outline-none focus:border-secondary"
                         />
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
@@ -285,7 +284,7 @@ function AccountContent() {
                       required
                       value={authEmail}
                       onChange={(e) => setAuthEmail(e.target.value)}
-                      placeholder="e.g. vikas@aonemobile.com"
+                      placeholder="Enter your email address"
                       className="w-full p-3 pl-10 border border-border rounded-input text-xs bg-background focus:outline-none focus:border-secondary"
                     />
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
@@ -300,7 +299,7 @@ function AccountContent() {
                       required
                       value={authPassword}
                       onChange={(e) => setAuthPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Enter your password"
                       className="w-full p-3 pl-10 border border-border rounded-input text-xs bg-background focus:outline-none focus:border-secondary"
                     />
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
