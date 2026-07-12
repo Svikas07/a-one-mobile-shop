@@ -189,10 +189,10 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
         </div>
 
         {/* Product core specs layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 mb-16">
           
           {/* LEFT COLUMN: Gallery */}
-          <div className="lg:col-span-6 space-y-4">
+          <div className="md:col-span-6 space-y-4">
             <div className="aspect-square bg-card border border-border rounded-modal overflow-hidden relative group">
               <img
                 src={product.images[activeImageIndex]}
@@ -218,7 +218,7 @@ export default function ProductPage({ params }: { params: Promise<{ slug: string
           </div>
 
           {/* RIGHT COLUMN: Options */}
-          <div className="lg:col-span-6 space-y-6">
+          <div className="md:col-span-6 space-y-6">
             <div>
               <span className="text-xs uppercase font-extrabold tracking-widest text-secondary bg-secondary/10 px-2.5 py-1 rounded">
                 Official Accessory

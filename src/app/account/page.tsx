@@ -348,7 +348,7 @@ function AccountContent() {
           </div>
         ) : (
           /* AUTHENTICATED STATE: CUSTOMER DASHBOARD */
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 text-left items-start">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 text-left items-start">
             
             {/* Sidebar Navigation */}
             <div className="bg-card border border-border rounded-modal p-6 space-y-6">
@@ -457,7 +457,7 @@ function AccountContent() {
             </div>
 
             {/* Dashboard Workspace */}
-            <div className="lg:col-span-3">
+            <div className="md:col-span-3">
               
               {/* Profile Details Tab */}
               {activeTab === 'profile' && (
