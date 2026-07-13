@@ -53,8 +53,8 @@
   --color-danger: #DC2626;
   --color-warning: #F59E0B;
   
-  --font-playfair: var(--font-playfair), serif;
-  --font-inter: var(--font-inter), sans-serif;
+  --font-playfair: var(--font-outfit), sans-serif;
+  --font-inter: var(--font-plus-jakarta), sans-serif;
   
   --radius-card: 20px;
   --radius-button: 16px;
