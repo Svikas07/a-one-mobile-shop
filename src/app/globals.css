@@ -53,8 +53,8 @@
   --color-danger: #DC2626;
   --color-warning: #F59E0B;
   
-  --font-playfair: var(--font-manrope), sans-serif;
-  --font-inter: var(--font-inter), sans-serif;
+  --font-heading: var(--font-manrope), sans-serif;
+  --font-body: var(--font-inter), sans-serif;
   
   --radius-card: 20px;
   --radius-button: 16px;
@@ -75,7 +75,7 @@
   
   html {
     scroll-behavior: smooth;
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-body);
     background-color: var(--background);
     color: var(--foreground);
   }
@@ -86,14 +86,21 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    font-family: var(--font-body);
   }
   
-  h1, h2, h3, h4, h5, h6, .font-playfair {
-    font-family: var(--font-manrope), sans-serif !important;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading) !important;
+    color: var(--text-primary);
+    font-weight: 700;
+  }
+  
+  .font-playfair {
+    font-family: var(--font-heading) !important;
   }
   
   .font-inter {
-    font-family: var(--font-inter), sans-serif !important;
+    font-family: var(--font-body) !important;
   }
 }
 
