@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { db, Order, Product, Address, isSupabaseConfigured } from '@/lib/db';
+import { db, Order, Product, Address } from '@/lib/db';
 import { Header } from '@/components/Header';
 import { AnnouncementBar } from '@/components/AnnouncementBar';
 import { Footer } from '@/components/Footer';
@@ -323,13 +323,11 @@ function AccountContent() {
               </form>
 
               {/* Demo Mode notice */}
-              {!isSupabaseConfigured && (
-                <div className="p-3 bg-background border border-border rounded-modal text-[10px] text-text-secondary leading-relaxed">
-                  💡 **Offline Demo Mode Hint:** Use credentials:<br />
-                  • Admin: `admin@aonemobile.com` | Password: `admin123`<br />
-                  • Customer: `vikas@aonemobile.com` | Password: `vikas123`
-                </div>
-              )}
+              <div className="p-3 bg-background border border-border rounded-modal text-[10px] text-text-secondary leading-relaxed">
+                💡 **Demo Mode Hint:** Use credentials:<br />
+                • Admin: `admin@aonemobile.com` | Password: `admin123`<br />
+                • Customer: `vikas@aonemobile.com` | Password: `vikas123`
+              </div>
 
               <div className="text-center pt-2 border-t border-border">
                 <button

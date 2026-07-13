@@ -14,6 +14,9 @@
     --shadow-medium: 0 12px 24px rgba(0, 0, 0, 0.05), 0 4px 8px rgba(0, 0, 0, 0.03);
     --shadow-large: 0 32px 64px rgba(0, 0, 0, 0.08), 0 12px 24px rgba(0, 0, 0, 0.04);
     
+    --font-manrope: 'Manrope', sans-serif;
+    --font-inter: 'Inter', sans-serif;
+    
     --glass-bg: rgba(255, 255, 255, 0.75);
     --glass-border: rgba(255, 255, 255, 0.4);
     --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);

@@ -25,7 +25,6 @@ export const Header: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [wishlistCount, setWishlistCount] = useState(0);
 
-  const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
@@ -46,7 +45,6 @@ export const Header: React.FC = () => {
 
   // Fetch header categories, brands and load wishlist count
   useEffect(() => {
-    db.getBrands().then(setBrands);
     db.getCategories().then(setCategories);
 
     const updateWishlist = async () => {
@@ -422,13 +420,15 @@ export const Header: React.FC = () => {
                 >
                   My Profile
                 </Link>
-                <Link
-                  href="/admin"
-                  className="block py-2 text-text-secondary hover:text-secondary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Admin Panel
-                </Link>
+                {user?.role === 'Admin' && (
+                  <Link
+                    href="/admin"
+                    className="block py-2 text-text-secondary hover:text-secondary"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Admin Panel
+                  </Link>
+                )}
               </div>
 
               {/* Mobile Footer support info */}

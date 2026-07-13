@@ -1,12 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
-export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
-
 // TYPES Definition
 export interface Brand {
   id: string;
@@ -434,7 +425,7 @@ const saveLocalState = (key: string, data: any) => {
   }
 };
 
-// INITIALIZE LOCAL DB STATE
+// INITIALIZE LOCAL DB STATE FOR OFFLINE FALLBACK
 let localProducts: Product[] = [];
 let localOrders: Order[] = [];
 let localAddresses: Address[] = [
@@ -466,47 +457,49 @@ if (typeof window !== 'undefined') {
   localOrders = [];
 }
 
-// DATABASE LAYER ACCESSORS
+// REST CLIENT FETCH HELPERS
+const getAuthToken = (): string => {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('aone_session_token') || '';
+};
+
+const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = getAuthToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+  
+  const res = await fetch(url, { ...options, headers });
+  const result = await res.json();
+  
+  if (!res.ok) {
+    throw new Error(result.error || 'API Request failed');
+  }
+  return result.data;
+};
+
+// DATABASE LAYER ACCESSORS REDIRECTED TO BACKEND API
 export const db = {
   // BRANDS
   async getBrands(): Promise<Brand[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('brands').select('*').eq('status', 'Active').order('sort_order', { ascending: true });
-      if (!error && data) return data;
-    }
-    return MOCK_BRANDS;
+    return apiFetch('/api/brands');
   },
 
   // CATEGORIES
   async getCategories(): Promise<Category[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('categories').select('*').eq('status', 'Active').order('sort_order', { ascending: true });
-      if (!error && data) return data;
-    }
-    return MOCK_CATEGORIES;
+    return apiFetch('/api/categories');
   },
 
   // PHONE MODELS
   async getPhoneModels(brandId?: string): Promise<PhoneModel[]> {
-    if (isSupabaseConfigured) {
-      let query = supabase!.from('phone_models').select('*').eq('status', 'Active');
-      if (brandId) query = query.eq('brand_id', brandId);
-      const { data, error } = await query;
-      if (!error && data) return data;
-    }
-    
-    if (brandId) {
-      return MOCK_MODELS.filter(m => m.brand_id === brandId);
-    }
-    return MOCK_MODELS;
+    const url = brandId ? `/api/models?brandId=${brandId}` : '/api/models';
+    return apiFetch(url);
   },
 
-  async getPhoneModelBySlug(slug: string): Promise<PhoneModel | undefined> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('phone_models').select('*').eq('model_slug', slug).single();
-      if (!error && data) return data;
-    }
-    return MOCK_MODELS.find(m => m.model_slug === slug);
+  async getPhoneModelBySlug(slug: string): Promise<PhoneModel | null> {
+    return apiFetch(`/api/models?slug=${slug}`);
   },
 
   // PRODUCTS
@@ -523,382 +516,250 @@ export const db = {
     searchQuery?: string;
     sort?: string;
   }): Promise<Product[]> {
-    if (isSupabaseConfigured) {
-      // Real Supabase queries with joins for compatibility filter mapping
-      let query = supabase!.from('products').select('*, compatibility(phone_model_id)').eq('status', 'Published');
-      
-      if (filters?.brandId) query = query.eq('brand_id', filters.brandId);
-      if (filters?.categoryId) query = query.eq('category_id', filters.categoryId);
-      if (filters?.material) query = query.eq('material', filters.material);
-      if (filters?.finish) query = query.eq('finish', filters.finish);
-      if (filters?.color) query = query.eq('color', filters.color);
-      if (filters?.speed) query = query.eq('charging_speed', filters.speed);
-      
-      const { data, error } = await query;
-      if (!error && data) {
-        let results = data.map((item: any) => ({
-          ...item,
-          compatibility: item.compatibility?.map((c: any) => c.phone_model_id) || []
-        }));
-        
-        // Filter by compatibility model client-side if needed
-        if (filters?.modelId) {
-          results = results.filter(p => p.compatibility.includes(filters.modelId));
-        }
-        
-        if (filters?.searchQuery) {
-          const q = filters.searchQuery.toLowerCase();
-          results = results.filter(p => 
-            p.product_name.toLowerCase().includes(q) || 
-            p.sku.toLowerCase().includes(q) ||
-            p.short_description.toLowerCase().includes(q)
-          );
-        }
-
-        if (filters?.minPrice) results = results.filter(p => (p.sale_price || p.price) >= filters.minPrice!);
-        if (filters?.maxPrice) results = results.filter(p => (p.sale_price || p.price) <= filters.maxPrice!);
-
-        // Sorting logic
-        if (filters?.sort === 'price-low-high') results.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price));
-        else if (filters?.sort === 'price-high-low') results.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price));
-        else if (filters?.sort === 'newest') results.sort((a, b) => b.new_arrival === a.new_arrival ? 0 : b.new_arrival ? 1 : -1);
-        else results.sort((a, b) => b.best_seller === a.best_seller ? 0 : b.best_seller ? 1 : -1);
-
-        return results;
-      }
-    }
-
-    // Fallback Mock Filtering logic
-    let products = [...localProducts].filter(p => p.status === 'Published');
-
+    const params = new URLSearchParams();
     if (filters) {
-      if (filters.brandId) {
-        // Handle compatible brand mappings (if phone model is mapped, brand mapping is derived)
-        const brandModels = MOCK_MODELS.filter(m => m.brand_id === filters.brandId).map(m => m.id);
-        products = products.filter(p => p.compatibility.some(mid => brandModels.includes(mid)));
-      }
-      if (filters.modelId) {
-        products = products.filter(p => p.compatibility.includes(filters.modelId!));
-      }
-      if (filters.categoryId) {
-        products = products.filter(p => p.category_id === filters.categoryId);
-      }
-      if (filters.material) {
-        products = products.filter(p => p.material?.toLowerCase() === filters.material?.toLowerCase());
-      }
-      if (filters.finish) {
-        products = products.filter(p => p.finish?.toLowerCase() === filters.finish?.toLowerCase());
-      }
-      if (filters.color) {
-        products = products.filter(p => p.color?.toLowerCase().includes(filters.color!.toLowerCase()));
-      }
-      if (filters.speed) {
-        products = products.filter(p => p.charging_speed?.toLowerCase() === filters.speed?.toLowerCase());
-      }
-      if (filters.minPrice !== undefined) {
-        products = products.filter(p => (p.sale_price || p.price) >= filters.minPrice!);
-      }
-      if (filters.maxPrice !== undefined) {
-        products = products.filter(p => (p.sale_price || p.price) <= filters.maxPrice!);
-      }
-      if (filters.searchQuery) {
-        const q = filters.searchQuery.toLowerCase();
-        products = products.filter(p => 
-          p.product_name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          p.short_description.toLowerCase().includes(q) ||
-          p.full_description.toLowerCase().includes(q)
-        );
-      }
-      if (filters.sort) {
-        if (filters.sort === 'price-low-high') {
-          products.sort((a, b) => (a.sale_price || a.price) - (b.sale_price || b.price));
-        } else if (filters.sort === 'price-high-low') {
-          products.sort((a, b) => (b.sale_price || b.price) - (a.sale_price || a.price));
-        } else if (filters.sort === 'newest') {
-          products.sort((a, b) => (b.new_arrival ? 1 : 0) - (a.new_arrival ? 1 : 0));
-        } else if (filters.sort === 'popular') {
-          products.sort((a, b) => (b.trending ? 1 : 0) - (a.trending ? 1 : 0));
+      Object.entries(filters).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== '') {
+          params.append(key, String(val));
         }
-      }
+      });
     }
-    return products;
+    const queryString = params.toString();
+    const url = queryString ? `/api/products?${queryString}` : '/api/products';
+    return apiFetch(url);
   },
 
-  async getProductBySlug(slug: string): Promise<Product | undefined> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('products').select('*, compatibility(phone_model_id)').eq('slug', slug).single();
-      if (!error && data) {
-        return {
-          ...data,
-          compatibility: data.compatibility?.map((c: any) => c.phone_model_id) || []
-        };
-      }
-    }
-    return localProducts.find(p => p.slug === slug);
+  async getProductBySlug(slug: string): Promise<Product | null> {
+    return apiFetch(`/api/products/${slug}`);
   },
 
   // REVIEWS
   async getReviews(productId: string): Promise<Review[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('reviews').select('*').eq('product_id', productId).eq('status', 'Approved');
-      if (!error && data) return data;
-    }
-    return MOCK_REVIEWS.filter(r => r.product_id === productId);
+    return apiFetch(`/api/reviews?productId=${productId}`);
   },
 
   async addReview(productId: string, review: Omit<Review, 'id' | 'created_at' | 'helpful_count'>): Promise<Review> {
-    const newReview: Review = {
-      ...review,
-      id: 'rev_' + Math.random().toString(36).substr(2, 9),
-      helpful_count: 0,
-      created_at: new Date().toISOString()
-    };
-
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('reviews').insert([{ ...newReview, product_id: productId }]).select().single();
-      if (!error && data) return data;
-    }
-
-    MOCK_REVIEWS.unshift(newReview);
-    return newReview;
+    return apiFetch('/api/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ productId, ...review }),
+    });
   },
 
   // COUPONS
   async getCoupons(): Promise<Coupon[]> {
-    if (isSupabaseConfigured) {
-      const { data, error } = await supabase!.from('coupons').select('*').eq('status', 'Active');
-      if (!error && data) return data;
-    }
-    return MOCK_COUPONS;
+    return apiFetch('/api/admin/coupons');
   },
 
   async validateCoupon(code: string, orderTotal: number): Promise<{ success: boolean; discount: number; message: string }> {
-    const coupon = (await this.getCoupons()).find(c => c.code.toUpperCase() === code.toUpperCase());
-    if (!coupon) {
-      return { success: false, discount: 0, message: 'Invalid Coupon Code' };
-    }
-    if (coupon.status !== 'Active') {
-      return { success: false, discount: 0, message: 'Coupon is inactive' };
-    }
-    if (orderTotal < coupon.min_order_value) {
-      return { success: false, discount: 0, message: `Minimum purchase of ₹${coupon.min_order_value} required` };
-    }
-    
-    let discount = 0;
-    if (coupon.type === 'Percentage') {
-      discount = (orderTotal * coupon.value) / 100;
-      if (coupon.max_discount && discount > coupon.max_discount) {
-        discount = coupon.max_discount;
-      }
-    } else if (coupon.type === 'Flat') {
-      discount = coupon.value;
-    }
-
-    return { success: true, discount, message: 'Coupon applied successfully!' };
+    return apiFetch('/api/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code, orderTotal }),
+    });
   },
 
-  // WISHLIST
+  // WISHLIST (WITH CLIENT FALLBACK FOR GUESTS)
   async getWishlistItems(): Promise<Product[]> {
-    const list = getLocalState<string[]>('aone_wishlist', localWishlist);
+    const token = getAuthToken();
+    let productIds: string[] = [];
+    if (!token) {
+      productIds = getLocalState<string[]>('aone_wishlist', localWishlist);
+    } else {
+      try {
+        productIds = await apiFetch('/api/wishlist');
+      } catch (e) {
+        console.warn('API Wishlist error, using local fallback:', e);
+        productIds = getLocalState<string[]>('aone_wishlist', localWishlist);
+      }
+    }
     const activeProducts = await this.getProducts();
-    return activeProducts.filter(p => list.includes(p.id));
+    return activeProducts.filter(p => productIds.includes(p.id));
   },
 
   async toggleWishlist(productId: string): Promise<boolean> {
-    let list = getLocalState<string[]>('aone_wishlist', localWishlist);
-    let added = false;
-    if (list.includes(productId)) {
-      list = list.filter(id => id !== productId);
-    } else {
-      list.push(productId);
-      added = true;
+    const token = getAuthToken();
+    if (!token) {
+      let wishlist = getLocalState<string[]>('aone_wishlist', localWishlist);
+      let added = false;
+      const index = wishlist.indexOf(productId);
+      if (index > -1) {
+        wishlist = wishlist.filter(id => id !== productId);
+      } else {
+        wishlist.push(productId);
+        added = true;
+      }
+      localWishlist = wishlist;
+      saveLocalState('aone_wishlist', wishlist);
+      return added;
     }
-    localWishlist = list;
-    saveLocalState('aone_wishlist', list);
-    return added;
+    
+    const updatedList: string[] = await apiFetch('/api/wishlist/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ productId }),
+    });
+    return updatedList.includes(productId);
   },
 
-  // ADDRESSES
+  // ADDRESSES (WITH CLIENT FALLBACK FOR GUESTS)
   async getAddresses(): Promise<Address[]> {
-    return getLocalState<Address[]>('aone_addresses', localAddresses);
+    const token = getAuthToken();
+    if (!token) {
+      return getLocalState<Address[]>('aone_addresses', localAddresses);
+    }
+    try {
+      return await apiFetch('/api/addresses');
+    } catch (e) {
+      console.warn('API Addresses error, using local fallback:', e);
+      return getLocalState<Address[]>('aone_addresses', localAddresses);
+    }
   },
 
   async saveAddress(address: Omit<Address, 'id'> & { id?: string }): Promise<Address> {
-    let list = getLocalState<Address[]>('aone_addresses', localAddresses);
-    let result: Address;
-
-    if (address.id) {
-      list = list.map(a => {
-        if (a.id === address.id) {
-          return { ...a, ...address } as Address;
-        }
+    const token = getAuthToken();
+    if (!token) {
+      let list = getLocalState<Address[]>('aone_addresses', localAddresses);
+      let result: Address;
+      if (address.id) {
+        list = list.map(a => {
+          if (a.id === address.id) return { ...a, ...address } as Address;
+          if (address.is_default) return { ...a, is_default: false };
+          return a;
+        });
+        result = list.find(a => a.id === address.id)!;
+      } else {
+        const id = 'addr_' + Math.random().toString(36).substring(2, 11);
+        result = { ...address, id } as Address;
         if (address.is_default) {
-          return { ...a, is_default: false };
+          list = list.map(a => ({ ...a, is_default: false }));
         }
-        return a;
-      });
-      result = list.find(a => a.id === address.id)!;
-    } else {
-      const id = 'addr_' + Math.random().toString(36).substr(2, 9);
-      result = { ...address, id } as Address;
-      if (address.is_default) {
-        list = list.map(a => ({ ...a, is_default: false }));
+        list.push(result);
       }
-      list.push(result);
+      localAddresses = list;
+      saveLocalState('aone_addresses', list);
+      return result;
     }
 
-    localAddresses = list;
-    saveLocalState('aone_addresses', list);
-    return result;
+    if (address.id && address.id.startsWith('addr_') === false && address.id.length > 20) {
+      return apiFetch(`/api/addresses/${address.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(address),
+      });
+    } else {
+      return apiFetch('/api/addresses', {
+        method: 'POST',
+        body: JSON.stringify(address),
+      });
+    }
   },
 
   async deleteAddress(addressId: string): Promise<void> {
-    let list = getLocalState<Address[]>('aone_addresses', localAddresses);
-    list = list.filter(a => a.id !== addressId);
-    localAddresses = list;
-    saveLocalState('aone_addresses', list);
+    const token = getAuthToken();
+    if (!token) {
+      let list = getLocalState<Address[]>('aone_addresses', localAddresses);
+      list = list.filter(a => a.id !== addressId);
+      localAddresses = list;
+      saveLocalState('aone_addresses', list);
+      return;
+    }
+    
+    return apiFetch(`/api/addresses/${addressId}`, {
+      method: 'DELETE',
+    });
   },
 
-  // ORDERS
+  // ORDERS (WITH CLIENT FALLBACK FOR GUESTS)
   async createOrder(orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'updated_at' | 'order_status' | 'payment_status'>): Promise<Order> {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderNumber = `AO-${new Date().getFullYear()}-${randomSuffix}`;
-    const newOrder: Order = {
-      ...orderData,
-      id: 'ord_' + Math.random().toString(36).substr(2, 9),
-      order_number: orderNumber,
-      order_status: 'Pending',
-      payment_status: orderData.payment_method === 'COD' ? 'Pending' : 'Captured',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    // Decrement local inventory stock
-    for (const item of newOrder.items) {
-      localProducts = localProducts.map(p => {
-        if (p.id === item.product_id) {
-          const newStock = Math.max(0, p.stock - item.quantity);
-          return { ...p, stock: newStock };
-        }
-        return p;
+    const token = getAuthToken();
+    try {
+      return await apiFetch('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify(orderData),
       });
+    } catch (e) {
+      if (!token) {
+        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+        const orderNumber = `AO-${new Date().getFullYear()}-${randomSuffix}`;
+        const newOrder: Order = {
+          ...orderData,
+          id: 'ord_' + Math.random().toString(36).substring(2, 11),
+          order_number: orderNumber,
+          order_status: 'Pending',
+          payment_status: orderData.payment_method === 'COD' ? 'Pending' : 'Captured',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        localProducts = localProducts.map(p => {
+          const item = orderData.items.find((i: any) => i.product_id === p.id);
+          if (item) {
+            return { ...p, stock: Math.max(0, p.stock - item.quantity) };
+          }
+          return p;
+        });
+        saveLocalState('aone_products', localProducts);
+        
+        let list = getLocalState<Order[]>('aone_orders', localOrders);
+        list.unshift(newOrder);
+        localOrders = list;
+        saveLocalState('aone_orders', list);
+        return newOrder;
+      }
+      throw e;
     }
-
-    // Save updated products and orders
-    saveLocalState('aone_products', localProducts);
-    
-    let list = getLocalState<Order[]>('aone_orders', localOrders);
-    list.unshift(newOrder);
-    localOrders = list;
-    saveLocalState('aone_orders', list);
-
-    return newOrder;
   },
 
   async getOrders(): Promise<Order[]> {
-    return getLocalState<Order[]>('aone_orders', localOrders);
+    const token = getAuthToken();
+    if (!token) {
+      return getLocalState<Order[]>('aone_orders', localOrders);
+    }
+    try {
+      return await apiFetch('/api/orders');
+    } catch (e) {
+      console.warn('API Orders error, using local fallback:', e);
+      return getLocalState<Order[]>('aone_orders', localOrders);
+    }
   },
 
-  async getOrderDetails(orderNumber: string): Promise<Order | undefined> {
-    const list = await this.getOrders();
-    return list.find(o => o.order_number.toUpperCase() === orderNumber.toUpperCase());
+  async getOrderDetails(orderNumber: string): Promise<Order | null> {
+    return apiFetch(`/api/orders/${orderNumber}`);
   },
 
-  async trackOrder(orderNumber: string, contact: string): Promise<Order | undefined> {
-    const list = await this.getOrders();
-    const cleanContact = contact.trim().toLowerCase();
-    
-    return list.find(o => 
-      o.order_number.toUpperCase() === orderNumber.toUpperCase() && 
-      (o.guest_email?.toLowerCase() === cleanContact || 
-       o.guest_phone === cleanContact ||
-       o.address_snapshot.phone_number === cleanContact ||
-       o.address_snapshot.email?.toLowerCase() === cleanContact)
-    );
+  async trackOrder(orderNumber: string, contact: string): Promise<Order | null> {
+    return apiFetch('/api/orders/track', {
+      method: 'POST',
+      body: JSON.stringify({ orderNumber, contact }),
+    });
   },
 
-  // ADMIN OPERATIONS
-  async getAdminKPIs(): Promise<{
-    revenue: number;
-    ordersCount: number;
-    productsCount: number;
-    lowStockCount: number;
-    pendingCount: number;
-    recentOrders: Order[];
-    salesChart: { label: string; value: number }[];
-  }> {
-    const list = await this.getOrders();
-    const products = await this.getProducts();
-
-    const revenue = list
-      .filter(o => o.order_status !== 'Cancelled')
-      .reduce((sum, o) => sum + o.grand_total, 0);
-
-    const lowStockCount = products.filter(p => p.stock <= p.low_stock_limit).length;
-    const pendingCount = list.filter(o => o.order_status === 'Pending').length;
-
-    // Build standard sales chart (last 7 orders or days)
-    const salesChart = list.slice(0, 7).reverse().map(o => ({
-      label: o.order_number,
-      value: o.grand_total
-    }));
-
-    return {
-      revenue,
-      ordersCount: list.length,
-      productsCount: products.length,
-      lowStockCount,
-      pendingCount,
-      recentOrders: list.slice(0, 5),
-      salesChart
-    };
+  // ADMIN OPERATIONS (PROTECTED)
+  async getAdminKPIs(): Promise<any> {
+    return apiFetch('/api/admin/kpis');
   },
 
   async adminCreateProduct(productData: Omit<Product, 'id'>): Promise<Product> {
-    const id = 'p_' + Math.random().toString(36).substr(2, 9);
-    const newProduct: Product = { ...productData, id };
-    
-    localProducts.unshift(newProduct);
-    saveLocalState('aone_products', localProducts);
-    return newProduct;
+    return apiFetch('/api/admin/products', {
+      method: 'POST',
+      body: JSON.stringify(productData),
+    });
   },
 
   async adminUpdateProduct(id: string, productData: Partial<Product>): Promise<Product> {
-    localProducts = localProducts.map(p => {
-      if (p.id === id) {
-        return { ...p, ...productData } as Product;
-      }
-      return p;
+    return apiFetch(`/api/admin/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(productData),
     });
-    saveLocalState('aone_products', localProducts);
-    return localProducts.find(p => p.id === id)!;
   },
 
   async adminDeleteProduct(id: string): Promise<void> {
-    localProducts = localProducts.filter(p => p.id !== id);
-    saveLocalState('aone_products', localProducts);
+    return apiFetch(`/api/admin/products/${id}`, {
+      method: 'DELETE',
+    });
   },
 
-  async adminUpdateOrderStatus(orderId: string, updates: {
-    order_status?: Order['order_status'];
-    payment_status?: Order['payment_status'];
-    tracking_number?: string;
-    courier_name?: string;
-  }): Promise<Order> {
-    let list = getLocalState<Order[]>('aone_orders', localOrders);
-    list = list.map(o => {
-      if (o.id === orderId) {
-        return {
-          ...o,
-          ...updates,
-          updated_at: new Date().toISOString()
-        } as Order;
-      }
-      return o;
+  async adminUpdateOrderStatus(orderId: string, updates: any): Promise<Order> {
+    return apiFetch(`/api/admin/orders/${orderId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
     });
-    localOrders = list;
-    saveLocalState('aone_orders', list);
-    return localOrders.find(o => o.id === orderId)!;
   }
 };
