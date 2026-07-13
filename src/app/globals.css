@@ -75,7 +75,7 @@
   
   html {
     scroll-behavior: smooth;
-    font-family: var(--font-inter);
+    font-family: var(--font-inter), sans-serif;
     background-color: var(--background);
     color: var(--foreground);
   }
@@ -88,10 +88,12 @@
     flex-direction: column;
   }
   
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-playfair);
-    color: var(--text-primary);
-    font-weight: 700;
+  h1, h2, h3, h4, h5, h6, .font-playfair {
+    font-family: var(--font-manrope), sans-serif !important;
+  }
+  
+  .font-inter {
+    font-family: var(--font-inter), sans-serif !important;
   }
 }
 
